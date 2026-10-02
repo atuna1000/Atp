@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>ATP Points Calculator</title>
+<title>ATP Ranking Simulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -97,29 +97,63 @@ label.q { font-size: .78rem; color: var(--muted); display: flex; gap: 4px; align
   .stat.main .v { font-size: 2.3rem; }
   h1 { font-size: 2rem; }
 }
+.wk { display: flex; flex-direction: column; min-width: 0; }
+.wk .k { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; opacity: .8; }
+.wk .v { font-family: var(--display); font-weight: 700; font-size: 1.35rem; line-height: 1.1; }
+.delta { font-family: var(--mono); font-size: .8rem; margin-left: 6px; }
+.up { color: var(--ball); } .down { color: #ffb4a8; }
+.board .next { background: var(--ball); color: var(--ball-ink); border-color: var(--ball); font-weight: 600; }
+.board button:disabled { opacity: .4; cursor: default; }
+.chart { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 6px; }
+.chart .head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); }
+.chart svg { display: block; width: 100%; height: 110px; }
+.drops { margin-top: 8px; font-size: .85rem; color: var(--muted); }
+.drops b { color: var(--ink); }
+.tag { display: inline-block; font-size: .68rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: var(--ball); color: var(--ball-ink); margin-left: 6px; vertical-align: 1px; }
+.tag.drop { background: transparent; color: var(--m1000); border: 1px solid currentColor; }
+.empty { padding: 14px; color: var(--muted); font-size: .9rem; }
+.row.live .pts { color: var(--muted); }
+@media (max-width: 620px) {
+  .row { grid-template-columns: 1fr auto; }
+  .date { grid-column: 1 / -1; order: -1; margin-bottom: -6px; }
+  .ctl { grid-column: 1 / 2; justify-content: flex-start; }
+  .pts { grid-row: 2; grid-column: 2; }
+  .board { gap: 10px 20px; padding: 12px 14px; }
+  .board .actions { margin-left: 0; width: 100%; }
+  .board .actions .next { flex: 1; }
+  .stat.main .v { font-size: 2.2rem; }
+  h1 { font-size: 2rem; }
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>ATP Points Calculator</h1>
-  <p class="sub">Every ATP 250, 500, Masters 1000, Grand Slam and the ATP Finals in the 52-week window ending 2 Oct 2026. Pick how far you got at each one and your ranking points add up live.</p>
+  <h1>ATP Ranking Simulator</h1>
+  <p class="sub">Enter how far you got at each event, then press <b>Next week</b>. Like the real ATP ranking, your points from each event drop off when that event comes round again a year later. Your rank is an estimate based on recent ranking cut-offs.</p>
 
   <div class="board" aria-live="polite">
+    <div class="wk"><span class="k">Ranking week of</span><span class="v" id="week">–</span></div>
     <div class="stat main"><span class="k">Ranking points</span><span class="v" id="total">0</span></div>
-    <div class="stat"><span class="k">Raw sum, all events</span><span class="v" id="raw">0</span></div>
-    <div class="stat"><span class="k">Events played</span><span class="v" id="played">0</span></div>
-    <div class="stat"><span class="k">Titles</span><span class="v" id="titles">0</span></div>
+    <div class="stat"><span class="k">Est. rank</span><span class="v"><span id="rank">–</span><span class="delta" id="rankDelta"></span></span></div>
+    <div class="stat"><span class="k">Career high</span><span class="v" id="high">–</span></div>
     <div class="actions">
-      <button type="button" id="example">Load example</button>
-      <button type="button" id="clear">Clear all</button>
+      <button type="button" id="prev">← Back</button>
+      <button type="button" id="next" class="next">Next week →</button>
     </div>
   </div>
-  <div class="example" id="exNote" hidden>Showing an example season so you can see how it works. Press <b>Clear all</b> to enter your own results.</div>
 
+  <div class="chart">
+    <div class="head"><span>Ranking points by week</span><span id="chartRange"></span></div>
+    <svg id="spark" viewBox="0 0 600 110" preserveAspectRatio="none" aria-label="Ranking points over time"></svg>
+  </div>
+  <div class="drops" id="drops"></div>
+  <div class="example" id="exNote" hidden>Showing an example season so you can see how it works. Press <b>Start over</b> at the bottom to enter your own results.</div>
+
+  <section class="month"><h2>Playing this week</h2><div class="list" id="thisWeek"></div></section>
   <div id="cal"></div>
 
   <section class="custom">
-    <div class="month"><h2>Missing an event? Add it</h2></div>
+    <div class="month"><h2>Played an event that's not listed? Add it to this week</h2></div>
     <form id="addForm">
       <input type="text" id="cName" placeholder="Event name, e.g. Newport" required>
       <select id="cTier" aria-label="Category">
@@ -132,20 +166,29 @@ label.q { font-size: .78rem; color: var(--muted); display: flex; gap: 4px; align
     </form>
   </section>
 
+  <section class="custom">
+    <div class="month"><h2>Reset</h2></div>
+    <form id="resetForm">
+      <button type="button" id="example">Load example</button>
+      <button type="button" id="clear">Start over</button>
+      <span class="note" id="clearConfirm" hidden>Press <b>Start over</b> again to wipe all your results.</span>
+    </form>
+  </section>
+
   <section class="rules">
-    <h3>How the total is counted</h3>
+    <h3>How it works</h3>
     <ul>
-      <li><b>Ranking points</b> follows the ATP "best 19" rule: all 4 Grand Slams and the 8 mandatory Masters 1000s always count (zero if you skipped them), plus your best 7 results from the ATP 500s, ATP 250s and Monte-Carlo. ATP Finals points are added on top as a bonus 20th result.</li>
-      <li>Struck-through points are results that fall outside your best 7 and don't count.</li>
-      <li>Tick <b>Q</b> if you came through qualifying. Your qualifying points are added to whatever you earned in the main draw.</li>
-      <li>If you had a first-round bye and lost your first match, pick the round you lost in. ATP gives that the points of a first-round loss, which the calculator does automatically where it matters.</li>
-      <li>Points tables are the current ATP singles values. Challenger, ITF and United Cup points are not included. Dates are approximate weeks.</li>
+      <li>Each Monday is a new ranking week. Events in <b>Playing this week</b> are in progress; their points count from the Monday after the final.</li>
+      <li>Points count for 52 weeks. When an event is played again, last year's result drops off on the same Monday the new one comes in, so defending points matters.</li>
+      <li>The total follows the ATP "best 19" rule: all 4 Grand Slams and the 8 mandatory Masters 1000s always count, plus your best 7 results from ATP 500s, ATP 250s and Monte-Carlo. ATP Finals points go on top. Results outside your best 7 are struck through.</li>
+      <li>Tick <b>Q</b> if you came through qualifying; those points are added to your main-draw points.</li>
+      <li>The calendar repeats each year on the same weeks. Real dates shift a little year to year. Challenger, ITF and United Cup points are not included.</li>
+      <li>Estimated rank uses typical points cut-offs (about 650 points for top 100, 3,500 for top 10). It is a rough guide, not a live ranking.</li>
     </ul>
   </section>
 </div>
 
 <script>
-// Points tables (ATP singles). Keys are stages; "q" = qualifying bonus, "qr" = lost in final qualifying round.
 const T = {
   gs:      { W:2000, F:1300, SF:800, QF:400, R16:200, R32:100, R64:50, R128:10, q:30, qr:16 },
   m96:     { W:1000, F:650,  SF:400, QF:200, R16:100, R32:50,  R64:30, R128:10, q:20, qr:10 },
@@ -225,77 +268,102 @@ const EVENTS = [
 const TIER_CHIP = { gs:["Slam","c-gs"], m1000:["1000","c-m1000"], "500":["500","c-500"], "250":["250","c-250"], fin:["Finals","c-fin"] };
 const TIER_TABLE = { gs:"gs", m1000:"m96", "500":"t500", "250":"t250" };
 
-let state = { sel:{}, custom:[] };
-const KEY = "atp-points-v1";
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.sel) state = s; else state = null; } catch { state = null; }
-let isExample = false;
+
+const DAY = 86400000;
+const iso = t => new Date(t).toISOString().slice(0,10);
+const P = s => Date.parse(s+"T00:00:00Z");
+const fmt = (t,o={day:"numeric",month:"short"}) => new Date(t).toLocaleDateString("en-GB",{...o,timeZone:"UTC"});
+const nextMondayAfter = t => { const dow = (new Date(t).getUTCDay()+6)%7 + 1; return t + (8-dow)*DAY; };
+const DUR = { gs:15, m96:12, m56:8, fin:8 };
+const START = P("2026-09-28");   // ranking Monday on/before today, 2 Oct 2026
+
+// Every edition of every event: the base calendar repeated every 52 weeks.
+const BASE = EVENTS;
+const editionCache = new Map();
+function editionsAround(D){
+  const out = [];
+  for (let k=-2; k<=Math.ceil((D-START)/(364*DAY))+1; k++){
+    BASE.forEach((e,i)=>{
+      const id = `e${i}_${k}`;
+      if (!editionCache.has(id)){
+        const start = P(e.d) + k*364*DAY;
+        const last = start + ((DUR[e.table] || DUR[e.tier] || 7) - 1)*DAY;
+        editionCache.set(id, { ...e, id, start, last, from: nextMondayAfter(last) });
+      }
+      out.push(editionCache.get(id));
+    });
+  }
+  state.custom.forEach(c=>{
+    const start = c.start, last = start + 6*DAY;
+    out.push({ ...c, table: TIER_TABLE[c.tier], mand:false, custom:true, start, last, from: nextMondayAfter(last) });
+  });
+  return out;
+}
+const isLive = (e,D) => e.start < D+7*DAY && e.last >= D;
+const counts = (e,D) => e.from <= D && D < e.from + 364*DAY;
+
+let state, isExample = false;
+const KEY = "atp-sim-v1";
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.sel && s.week) state = s; } catch {}
 if (!state) { state = exampleState(); isExample = true; }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+function save(){ if (!isExample) try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
 
 function exampleState(){
   const pick = { "Australian Open":"R32", "Indian Wells Masters":"R16", "Miami Open":"R64", "Madrid Open":"QF", "Italian Open":"R32",
-    "Roland Garros":"R16", "Wimbledon":"R64", "US Open":"R32", "Canadian Open":"R32", "Cincinnati Open":"R64",
-    "Rotterdam Open":"QF", "Barcelona Open":"SF", "Geneva Open":"W", "Halle Open":"R16", "Stockholm Open":"F", "Brisbane International":"QF" };
+    "Roland Garros":"R16", "Wimbledon":"R64", "US Open":"R32", "Canadian Open":"R32", "Cincinnati Open":"R64", "Shanghai Masters":"R32",
+    "Rotterdam Open":"QF", "Barcelona Open":"SF", "Geneva Open":"W", "Halle Open":"R16", "Stockholm Open":"F", "Brisbane International":"QF", "Swiss Indoors":"R16" };
   const sel = {};
-  EVENTS.forEach(e=>{ if (pick[e.name]) sel[e.id] = { s: pick[e.name], q:false }; });
-  return { sel, custom:[] };
+  BASE.forEach((e,i)=>{ if (pick[e.name]) sel[`e${i}_0`] = { s: pick[e.name], q:false }; });
+  return { week: START, sel, custom:[] };
 }
 
-function allEvents(){
-  return EVENTS.concat(state.custom.map(c=>({ ...c, table: TIER_TABLE[c.tier], mand:false, custom:true })));
-}
-function stagesFor(e){
-  if (e.tier==="fin") return [];
-  return ORDER.filter(s => s in T[e.table]);
-}
 function pointsFor(e){
   const r = state.sel[e.id]; if (!r) return 0;
   if (e.tier==="fin") return (r.rr||0)*200 + (r.sf?400:0) + (r.sf&&r.f?500:0);
   const t = T[e.table];
   if (r.s==="qr") return t.qr;
-  let p = t[r.s] ?? 0;
-  if (r.q) p += t.q;
-  return p;
+  return (t[r.s] ?? 0) + (r.q ? t.q : 0);
 }
 
-const cal = document.getElementById("cal");
-function fmt(d){ return new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}); }
+// Ranking on Monday D with the best-19 rule.
+function ranking(D){
+  const evs = editionsAround(D).filter(e=>counts(e,D) && state.sel[e.id]);
+  let total = 0; const opt = [];
+  evs.forEach(e=>{ const p = pointsFor(e); if (e.tier==="fin" || e.mand) total += p; else if (p>0) opt.push([e,p]); });
+  opt.sort((a,b)=>b[1]-a[1]);
+  opt.slice(0,7).forEach(([,p])=> total += p);
+  return { total, dropped: new Set(opt.slice(7).map(([e])=>e.id)) };
+}
 
-function render(){
-  const evs = allEvents().slice().sort((a,b)=> (a.d||"9999").localeCompare(b.d||"9999"));
-  const groups = new Map();
-  evs.forEach(e=>{
-    const k = e.custom ? "Your added events" : new Date(e.d+"T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"});
-    if (!groups.has(k)) groups.set(k,[]); groups.get(k).push(e);
-  });
-  cal.innerHTML = "";
-  for (const [month, list] of groups){
-    const sec = document.createElement("section"); sec.className="month";
-    sec.innerHTML = `<h2>${month}</h2>`;
-    const box = document.createElement("div"); box.className="list";
-    list.forEach(e=> box.appendChild(rowFor(e)));
-    sec.appendChild(box); cal.appendChild(sec);
+// Approximate points needed for each rank (recent seasons)
+const CUT = [[11000,1],[8000,2],[5000,5],[3500,10],[2400,20],[1700,30],[1300,40],[1100,50],[850,75],[650,100],[480,150],[370,200],[260,300],[190,400],[140,500],[90,700],[55,1000],[20,1500],[5,2000],[1,2200]];
+function estRank(p){
+  if (p<=0) return null;
+  if (p>=CUT[0][0]) return 1;
+  for (let i=1;i<CUT.length;i++){
+    const [p1,r1] = CUT[i-1], [p2,r2] = CUT[i];
+    if (p>=p2){ const f = Math.log(p1/p)/Math.log(p1/p2); return Math.max(1, Math.round(Math.exp(Math.log(r1)+f*(Math.log(r2)-Math.log(r1))))); }
   }
-  update();
+  return 2300;
 }
 
-function rowFor(e){
-  const row = document.createElement("div"); row.className="row"; row.dataset.id = e.id;
+function rowFor(e, D, live){
+  const row = document.createElement("div"); row.className="row"+(live?" live":""); row.dataset.id = e.id;
   const [chip, cls] = TIER_CHIP[e.tier];
   const r = state.sel[e.id] || {};
-  let ctl = "";
+  let ctl;
   if (e.tier==="fin"){
     ctl = `<select id="rr-${e.id}" aria-label="Round-robin wins at ${e.name}">
         <option value="-1">Did not play</option>
         ${[0,1,2,3].map(n=>`<option value="${n}" ${r.rr===n?"selected":""}>${n} RR win${n===1?"":"s"}</option>`).join("")}
       </select>
       <select id="ko-${e.id}" aria-label="Knockout result at ${e.name}">
-        <option value="">Out in round robin / lost SF</option>
+        <option value="">Out in RR / lost SF</option>
         <option value="sf" ${r.sf&&!r.f?"selected":""}>Won SF, lost final</option>
         <option value="f" ${r.f?"selected":""}>Won title</option>
       </select>`;
   } else {
-    const opts = stagesFor(e).map(s=>`<option value="${s}" ${r.s===s?"selected":""}>${STAGE_LABEL[s]}</option>`).join("");
+    const opts = ORDER.filter(s=>s in T[e.table]).map(s=>`<option value="${s}" ${r.s===s?"selected":""}>${STAGE_LABEL[s]}</option>`).join("");
     ctl = `<select id="st-${e.id}" aria-label="Result at ${e.name}">
         <option value="">Did not play</option>${opts}
         <option value="qr" ${r.s==="qr"?"selected":""}>${STAGE_LABEL.qr}</option>
@@ -303,18 +371,105 @@ function rowFor(e){
       <label class="q" title="Came through qualifying"><input type="checkbox" id="q-${e.id}" ${r.q?"checked":""} ${!r.s||r.s==="qr"?"disabled":""}> Q</label>`;
     if (e.custom) ctl += `<button type="button" class="rm" data-rm="${e.id}">Remove</button>`;
   }
-  const meta = e.tier==="fin" ? "200 per RR win · +400 SF · +500 final" :
-    `${e.city}${e.mand?" · mandatory":""}${/48/.test(e.table)?" · 48-draw":""}${e.table==="m56"?" · 56-draw":""}`;
-  row.innerHTML = `<div class="date">${e.d?fmt(e.d):"—"}</div>
-    <div class="ev"><div class="name"><span class="chip ${cls}">${chip}</span>${e.name}</div><div class="meta">${meta}</div></div>
+  const year = new Date(e.start).getUTCFullYear();
+  const dropTag = !live && e.from + 364*DAY <= D + 7*DAY ? `<span class="tag drop">Drops next week</span>` : "";
+  const liveTag = live ? `<span class="tag">Final ${fmt(e.last)}</span>` : "";
+  const meta = live ? `${e.city || ""}${e.mand?" · mandatory":""} · counts from ${fmt(e.from)}`
+                    : `${e.city || ""}${e.mand?" · mandatory":""} · counts until ${fmt(e.from+364*DAY-DAY)}`;
+  row.innerHTML = `<div class="date">${fmt(e.start)}</div>
+    <div class="ev"><div class="name"><span class="chip ${cls}">${chip}</span>${e.name} ${year}${liveTag}${dropTag}</div><div class="meta">${meta}</div></div>
     <div class="ctl">${ctl}</div>
     <div class="pts zero">0</div>`;
   return row;
 }
 
-cal.addEventListener("change", ev=>{
+const cal = document.getElementById("cal"), tw = document.getElementById("thisWeek");
+function render(){
+  const D = state.week;
+  const evs = editionsAround(D);
+  const live = evs.filter(e=>isLive(e,D)).sort((a,b)=>a.start-b.start);
+  const counting = evs.filter(e=>!isLive(e,D) && counts(e,D)).sort((a,b)=>b.start-a.start);
+  tw.innerHTML = "";
+  if (!live.length) tw.innerHTML = `<div class="empty">No ATP 250+ events this week. Press Next week to move on.</div>`;
+  live.forEach(e=>tw.appendChild(rowFor(e,D,true)));
+  cal.innerHTML = "";
+  const groups = new Map();
+  counting.forEach(e=>{ const k = fmt(e.start,{month:"long",year:"numeric"}); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(e); });
+  let first = true;
+  for (const [month, list] of groups){
+    const sec = document.createElement("section"); sec.className="month";
+    sec.innerHTML = `<h2>${first ? "Counting toward your ranking · " : ""}${month}</h2>`; first = false;
+    const box = document.createElement("div"); box.className="list";
+    list.forEach(e=>box.appendChild(rowFor(e,D,false)));
+    sec.appendChild(box); cal.appendChild(sec);
+  }
+  update();
+}
+
+function update(){
+  const D = state.week;
+  const { total, dropped } = ranking(D);
+  const prevTotal = ranking(D-7*DAY).total;
+  document.querySelectorAll(".row").forEach(row=>{
+    const id = row.dataset.id, e = editionsAround(D).find(x=>x.id===id); if (!e) return;
+    const p = pointsFor(e), el = row.querySelector(".pts");
+    el.textContent = p; el.classList.toggle("zero", p===0);
+    row.classList.toggle("played", !!state.sel[id]);
+    row.classList.toggle("dropped", dropped.has(id));
+  });
+  const n = x=>x.toLocaleString("en-US");
+  document.getElementById("week").textContent = fmt(D,{day:"numeric",month:"short",year:"numeric"});
+  document.getElementById("total").textContent = n(total);
+  const rk = estRank(total), prk = estRank(prevTotal);
+  document.getElementById("rank").textContent = rk ? "#"+n(rk) : "Unranked";
+  const dEl = document.getElementById("rankDelta");
+  if (rk && prk && rk!==prk){ const up = rk<prk; dEl.textContent = (up?"▲":"▼")+Math.abs(prk-rk); dEl.className = "delta "+(up?"up":"down"); }
+  else if (rk && !prk){ dEl.textContent = "new"; dEl.className = "delta up"; }
+  else { dEl.textContent = ""; dEl.className = "delta"; }
+
+  // history from START to D
+  const hist = [];
+  for (let t=START; t<=D; t+=7*DAY) hist.push([t, ranking(t).total]);
+  const best = hist.reduce((a,b)=> b[1]>a[1]?b:a, hist[0]);
+  const hr = estRank(best[1]);
+  document.getElementById("high").textContent = hr ? "#"+n(hr) : "–";
+  drawChart(hist);
+
+  // points dropping next Monday
+  const nextD = D+7*DAY, ev = editionsAround(D);
+  const dropping = ev.filter(e=>counts(e,D) && !counts(e,nextD) && pointsFor(e)>0);
+  const coming = ev.filter(e=>!counts(e,D) && counts(e,nextD) && pointsFor(e)>0);
+  const dropPts = dropping.reduce((s,e)=>s+pointsFor(e),0), comePts = coming.reduce((s,e)=>s+pointsFor(e),0);
+  const parts = [];
+  if (dropping.length) parts.push(`Defending <b>${n(dropPts)}</b> from ${dropping.map(e=>e.name+" "+new Date(e.start).getUTCFullYear()).join(", ")}, which drops off next Monday.`);
+  if (coming.length) parts.push(`Adding <b>${n(comePts)}</b> from this week's results.`);
+  const nt = ranking(nextD).total;
+  if (parts.length) parts.push(`Next week: <b>${n(nt)}</b> points.`);
+  document.getElementById("drops").innerHTML = parts.join(" ") || "Nothing to defend this week.";
+  document.getElementById("prev").disabled = D <= START;
+}
+
+function drawChart(hist){
+  const svg = document.getElementById("spark"), W = 600, H = 110, pad = 8;
+  const max = Math.max(100, ...hist.map(h=>h[1]));
+  const x = i => hist.length===1 ? W/2 : pad + i*(W-2*pad)/(hist.length-1);
+  const y = v => H - pad - v/max*(H-2*pad-12);
+  const pts = hist.map((h,i)=>`${x(i).toFixed(1)},${y(h[1]).toFixed(1)}`);
+  const area = `M${x(0)},${H-pad} L${pts.join(" L")} L${x(hist.length-1)},${H-pad} Z`;
+  const last = hist[hist.length-1];
+  svg.innerHTML = `
+    <line x1="${pad}" x2="${W-pad}" y1="${H-pad}" y2="${H-pad}" stroke="var(--line)" stroke-width="1"/>
+    <line x1="${pad}" x2="${W-pad}" y1="${y(max)}" y2="${y(max)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="${pad}" y="${y(max)-3}" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${max.toLocaleString("en-US")}</text>
+    <path d="${area}" fill="var(--court)" fill-opacity=".14"/>
+    <polyline points="${pts.join(" ")}" fill="none" stroke="var(--court)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(hist.length-1)}" cy="${y(last[1])}" r="4" fill="var(--ball)" stroke="var(--court)" stroke-width="2"/>`;
+  document.getElementById("chartRange").textContent = hist.length>1 ? `${fmt(hist[0][0])} – ${fmt(last[0])} · ${hist.length} weeks` : "Press Next week to start the timeline";
+}
+
+function onChange(ev){
   const row = ev.target.closest(".row"); if (!row) return;
-  const id = row.dataset.id; const e = allEvents().find(x=>x.id===id);
+  const id = row.dataset.id; const e = editionsAround(state.week).find(x=>x.id===id); if (!e) return;
   if (e.tier==="fin"){
     const rr = +row.querySelector(`#rr-${id}`).value, ko = row.querySelector(`#ko-${id}`).value;
     if (rr<0) delete state.sel[id]; else state.sel[id] = { rr, sf: ko==="sf"||ko==="f", f: ko==="f" };
@@ -324,55 +479,32 @@ cal.addEventListener("change", ev=>{
     if (!s) delete state.sel[id]; else state.sel[id] = { s, q: qbox.checked };
   }
   markEdited(); save(); update();
-});
-cal.addEventListener("click", ev=>{
+}
+function onClick(ev){
   const id = ev.target.dataset && ev.target.dataset.rm; if (!id) return;
   state.custom = state.custom.filter(c=>c.id!==id); delete state.sel[id]; markEdited(); save(); render();
-});
+}
+[cal, tw].forEach(el=>{ el.addEventListener("change", onChange); el.addEventListener("click", onClick); });
 
 function markEdited(){ isExample = false; document.getElementById("exNote").hidden = true; }
 
-function update(){
-  const evs = allEvents();
-  const pts = Object.fromEntries(evs.map(e=>[e.id, pointsFor(e)]));
-  // best-19: mandatory always count; best 7 of the rest (non-Finals); Finals added on top
-  let total = 0, raw = 0, played = 0, titles = 0;
-  const optional = [];
-  evs.forEach(e=>{
-    const p = pts[e.id], r = state.sel[e.id];
-    raw += p;
-    if (r) { played++; if (r.s==="W" || r.f) titles++; }
-    if (e.tier==="fin" || e.mand) total += p;
-    else if (p>0) optional.push(e);
-  });
-  optional.sort((a,b)=>pts[b.id]-pts[a.id]);
-  const dropped = new Set(optional.slice(7).map(e=>e.id));
-  optional.slice(0,7).forEach(e=> total += pts[e.id]);
-
-  document.querySelectorAll(".row").forEach(row=>{
-    const id = row.dataset.id, p = pts[id] ?? 0, el = row.querySelector(".pts");
-    el.textContent = p; el.classList.toggle("zero", p===0);
-    row.classList.toggle("played", !!state.sel[id]);
-    row.classList.toggle("dropped", dropped.has(id));
-    row.title = dropped.has(id) ? "Outside your best 7 non-mandatory results, so it doesn't count" : "";
-  });
-  const n = x=>x.toLocaleString("en-US");
-  document.getElementById("total").textContent = n(total);
-  document.getElementById("raw").textContent = n(raw);
-  document.getElementById("played").textContent = played;
-  document.getElementById("titles").textContent = titles;
-}
-
-document.getElementById("clear").addEventListener("click", ()=>{ state = { sel:{}, custom:[] }; markEdited(); save(); render(); });
+document.getElementById("next").addEventListener("click", ()=>{ state.week += 7*DAY; markEdited(); save(); render(); });
+document.getElementById("prev").addEventListener("click", ()=>{ if (state.week>START){ state.week -= 7*DAY; markEdited(); save(); render(); } });
+let armed = false;
+document.getElementById("clear").addEventListener("click", ()=>{
+  const c = document.getElementById("clearConfirm");
+  if (!armed && !isExample){ armed = true; c.hidden = false; setTimeout(()=>{ armed=false; c.hidden=true; }, 4000); return; }
+  armed = false; c.hidden = true;
+  state = { week: START, sel:{}, custom:[] }; markEdited(); save(); render(); window.scrollTo(0,0);
+});
 document.getElementById("example").addEventListener("click", ()=>{
   state = exampleState(); isExample = true; document.getElementById("exNote").hidden = false;
-  try { localStorage.removeItem(KEY); } catch {} render();
+  try { localStorage.removeItem(KEY); } catch {} render(); window.scrollTo(0,0);
 });
 document.getElementById("addForm").addEventListener("submit", ev=>{
   ev.preventDefault();
   const name = document.getElementById("cName").value.trim(); if (!name) return;
-  const tier = document.getElementById("cTier").value;
-  state.custom.push({ id:"c"+Date.now(), name, city:"Added by you", tier, d:"" });
+  state.custom.push({ id:"c"+Date.now(), name, city:"Added by you", tier: document.getElementById("cTier").value, start: state.week });
   document.getElementById("cName").value = ""; markEdited(); save(); render();
 });
 
