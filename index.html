@@ -1,0 +1,372 @@
+<title>ATP Points Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky scoreboard summary on top, then the 52-week calendar as month-grouped rows you set one by one */
+:root {
+  --bg: #eef2f6;
+  --surface: #ffffff;
+  --ink: #12202f;
+  --muted: #5b6b7c;
+  --line: #d6dee7;
+  --court: #1f4e8c;      /* hard-court blue */
+  --ball: #c9e22a;       /* optic yellow */
+  --ball-ink: #1b2a06;
+  --gs: #6b3fa0; --m1000: #b4532a; --t500: #1f7a6d; --t250: #4f6476; --fin: #8a6d12;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1520; --surface: #152232; --ink: #e6edf5; --muted: #93a4b7; --line: #263649;
+  --court: #2a5a99; --ball: #d4ec3a; --ball-ink: #1b2a06;
+  --gs: #b691e6; --m1000: #f0956b; --t500: #5cc9b8; --t250: #a5b6c7; --fin: #e3c35a;
+  color-scheme: dark;
+}}
+:root[data-theme="dark"] {
+  --bg: #0d1520; --surface: #152232; --ink: #e6edf5; --muted: #93a4b7; --line: #263649;
+  --court: #2a5a99; --ball: #d4ec3a; --ball-ink: #1b2a06;
+  --gs: #b691e6; --m1000: #f0956b; --t500: #5cc9b8; --t250: #a5b6c7; --fin: #e3c35a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 920px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 2.4rem; line-height: 1; margin: 0; letter-spacing: .01em; text-transform: uppercase; text-wrap: balance; }
+.sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch; }
+
+.board {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  margin-top: 18px; background: var(--court); color: #fff; border-radius: 10px;
+  padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .18);
+}
+.stat { display: flex; flex-direction: column; min-width: 0; }
+.stat .k { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; opacity: .8; }
+.stat .v { font-family: var(--display); font-weight: 700; font-size: 1.7rem; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.stat.main .v { font-size: 2.8rem; background: var(--ball); color: var(--ball-ink); padding: 0 10px; border-radius: 6px; }
+.board .actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: inherit; font-size: .85rem; border-radius: 6px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.board button { background: transparent; color: #fff; border-color: rgb(255 255 255 / .45); }
+button:hover { filter: brightness(1.08); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ball); outline-offset: 2px; }
+
+.note { margin-top: 12px; font-size: .85rem; color: var(--muted); }
+.example { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface); border: 1px dashed var(--line); font-size: .85rem; }
+
+.month { margin-top: 26px; }
+.month h2 { font-family: var(--display); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; font-size: 1rem; color: var(--muted); margin: 0 0 6px; }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 74px 1fr auto 64px; gap: 10px 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row.played { background: color-mix(in srgb, var(--ball) 9%, var(--surface)); }
+.row.dropped .pts { text-decoration: line-through; color: var(--muted); }
+.date { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+.ev { min-width: 0; }
+.ev .name { font-weight: 600; }
+.chip { display: inline-block; font-size: .68rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; margin-right: 6px; vertical-align: 1px; }
+.c-gs { color: var(--gs); } .c-m1000 { color: var(--m1000); } .c-500 { color: var(--t500); } .c-250 { color: var(--t250); } .c-fin { color: var(--fin); }
+.ev .meta { font-size: .78rem; color: var(--muted); }
+.ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+select { font: inherit; font-size: .88rem; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); max-width: 100%; }
+label.q { font-size: .78rem; color: var(--muted); display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+.pts { font-family: var(--display); font-weight: 700; font-size: 1.35rem; text-align: right; font-variant-numeric: tabular-nums; }
+.pts.zero { color: var(--muted); font-weight: 500; }
+.custom { margin-top: 26px; }
+.custom form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.custom input[type=text] { font: inherit; font-size: .88rem; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); min-width: 0; flex: 1 1 180px; }
+.rm { padding: 2px 8px; font-size: .75rem; }
+.rules { margin-top: 30px; font-size: .85rem; color: var(--muted); max-width: 70ch; }
+.rules h3 { font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; color: var(--ink); font-size: 1.05rem; margin: 0 0 6px; }
+.rules ul { padding-left: 18px; margin: 0; display: grid; gap: 4px; }
+
+@media (max-width: 620px) {
+  .row { grid-template-columns: 1fr auto; }
+  .date { grid-column: 1 / -1; order: -1; margin-bottom: -6px; }
+  .ctl { grid-column: 1 / 2; justify-content: flex-start; }
+  .pts { grid-row: 2; grid-column: 2; }
+  .board .actions { margin-left: 0; }
+  .stat.main .v { font-size: 2.3rem; }
+  h1 { font-size: 2rem; }
+}
+</style>
+
+<div class="wrap">
+  <h1>ATP Points Calculator</h1>
+  <p class="sub">Every ATP 250, 500, Masters 1000, Grand Slam and the ATP Finals in the 52-week window ending 2 Oct 2026. Pick how far you got at each one and your ranking points add up live.</p>
+
+  <div class="board" aria-live="polite">
+    <div class="stat main"><span class="k">Ranking points</span><span class="v" id="total">0</span></div>
+    <div class="stat"><span class="k">Raw sum, all events</span><span class="v" id="raw">0</span></div>
+    <div class="stat"><span class="k">Events played</span><span class="v" id="played">0</span></div>
+    <div class="stat"><span class="k">Titles</span><span class="v" id="titles">0</span></div>
+    <div class="actions">
+      <button type="button" id="example">Load example</button>
+      <button type="button" id="clear">Clear all</button>
+    </div>
+  </div>
+  <div class="example" id="exNote" hidden>Showing an example season so you can see how it works. Press <b>Clear all</b> to enter your own results.</div>
+
+  <div id="cal"></div>
+
+  <section class="custom">
+    <div class="month"><h2>Missing an event? Add it</h2></div>
+    <form id="addForm">
+      <input type="text" id="cName" placeholder="Event name, e.g. Newport" required>
+      <select id="cTier" aria-label="Category">
+        <option value="250">ATP 250</option>
+        <option value="500">ATP 500</option>
+        <option value="m1000">Masters 1000</option>
+        <option value="gs">Grand Slam</option>
+      </select>
+      <button type="submit">Add event</button>
+    </form>
+  </section>
+
+  <section class="rules">
+    <h3>How the total is counted</h3>
+    <ul>
+      <li><b>Ranking points</b> follows the ATP "best 19" rule: all 4 Grand Slams and the 8 mandatory Masters 1000s always count (zero if you skipped them), plus your best 7 results from the ATP 500s, ATP 250s and Monte-Carlo. ATP Finals points are added on top as a bonus 20th result.</li>
+      <li>Struck-through points are results that fall outside your best 7 and don't count.</li>
+      <li>Tick <b>Q</b> if you came through qualifying. Your qualifying points are added to whatever you earned in the main draw.</li>
+      <li>If you had a first-round bye and lost your first match, pick the round you lost in. ATP gives that the points of a first-round loss, which the calculator does automatically where it matters.</li>
+      <li>Points tables are the current ATP singles values. Challenger, ITF and United Cup points are not included. Dates are approximate weeks.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+// Points tables (ATP singles). Keys are stages; "q" = qualifying bonus, "qr" = lost in final qualifying round.
+const T = {
+  gs:      { W:2000, F:1300, SF:800, QF:400, R16:200, R32:100, R64:50, R128:10, q:30, qr:16 },
+  m96:     { W:1000, F:650,  SF:400, QF:200, R16:100, R32:50,  R64:30, R128:10, q:20, qr:10 },
+  m56:     { W:1000, F:650,  SF:400, QF:200, R16:100, R32:50,  R64:10, q:25, qr:13 },
+  t500:    { W:500,  F:330,  SF:200, QF:100, R16:50,  R32:0,  q:25, qr:13 },
+  t500_48: { W:500,  F:330,  SF:200, QF:100, R16:50,  R32:25, R64:0, q:16, qr:8 },
+  t250:    { W:250,  F:165,  SF:100, QF:50,  R16:25,  R32:0,  q:13, qr:7 },
+  t250_48: { W:250,  F:165,  SF:100, QF:50,  R16:25,  R32:13, R64:0, q:7, qr:3 },
+};
+const STAGE_LABEL = { W:"Won title", F:"Lost in final", SF:"Lost in semis", QF:"Lost in quarters", R16:"Lost in R16", R32:"Lost in R32", R64:"Lost in R64", R128:"Lost in R128", qr:"Lost in qualifying (final round)" };
+const ORDER = ["W","F","SF","QF","R16","R32","R64","R128"];
+
+// tier: gs | m1000 | 500 | 250 | fin. table: key in T. mandatory: counts always (Slams + 8 mandatory M1000s)
+const EVENTS = [
+  ["2025-10-01","Shanghai Masters","Shanghai","m1000","m96",true],
+  ["2025-10-13","Almaty Open","Almaty","250","t250"],
+  ["2025-10-13","European Open","Brussels","250","t250"],
+  ["2025-10-13","Stockholm Open","Stockholm","250","t250"],
+  ["2025-10-20","Swiss Indoors","Basel","500","t500"],
+  ["2025-10-20","Erste Bank Open","Vienna","500","t500"],
+  ["2025-10-27","Paris Masters","Paris","m1000","m56",true],
+  ["2025-11-02","Hellenic Championship","Athens","250","t250"],
+  ["2025-11-02","Moselle Open","Metz","250","t250"],
+  ["2025-11-09","ATP Finals","Turin","fin","fin"],
+  ["2026-01-04","Brisbane International","Brisbane","250","t250"],
+  ["2026-01-04","Hong Kong Open","Hong Kong","250","t250"],
+  ["2026-01-11","Adelaide International","Adelaide","250","t250"],
+  ["2026-01-11","ASB Classic","Auckland","250","t250"],
+  ["2026-01-18","Australian Open","Melbourne","gs","gs",true],
+  ["2026-02-02","Open Occitanie","Montpellier","250","t250"],
+  ["2026-02-09","Dallas Open","Dallas","500","t500"],
+  ["2026-02-09","Rotterdam Open","Rotterdam","500","t500"],
+  ["2026-02-09","Argentina Open","Buenos Aires","250","t250"],
+  ["2026-02-16","Qatar Open","Doha","500","t500"],
+  ["2026-02-16","Rio Open","Rio de Janeiro","500","t500"],
+  ["2026-02-16","Delray Beach Open","Delray Beach","250","t250"],
+  ["2026-02-16","Open 13","Marseille","250","t250"],
+  ["2026-02-23","Dubai Championships","Dubai","500","t500"],
+  ["2026-02-23","Mexican Open","Acapulco","500","t500"],
+  ["2026-02-23","Chile Open","Santiago","250","t250"],
+  ["2026-03-04","Indian Wells Masters","Indian Wells","m1000","m96",true],
+  ["2026-03-18","Miami Open","Miami","m1000","m96",true],
+  ["2026-03-30","U.S. Clay Court Championships","Houston","250","t250"],
+  ["2026-03-30","Grand Prix Hassan II","Marrakech","250","t250"],
+  ["2026-03-30","Tiriac Open","Bucharest","250","t250"],
+  ["2026-04-05","Monte-Carlo Masters","Monte-Carlo","m1000","m56",false],
+  ["2026-04-13","Barcelona Open","Barcelona","500","t500"],
+  ["2026-04-13","BMW Open","Munich","500","t500"],
+  ["2026-04-22","Madrid Open","Madrid","m1000","m96",true],
+  ["2026-05-06","Italian Open","Rome","m1000","m96",true],
+  ["2026-05-17","Hamburg Open","Hamburg","500","t500"],
+  ["2026-05-17","Geneva Open","Geneva","250","t250"],
+  ["2026-05-24","Roland Garros","Paris","gs","gs",true],
+  ["2026-06-08","Stuttgart Open","Stuttgart","250","t250"],
+  ["2026-06-08","Libéma Open","'s-Hertogenbosch","250","t250"],
+  ["2026-06-15","Halle Open","Halle","500","t500"],
+  ["2026-06-15","Queen's Club Championships","London","500","t500"],
+  ["2026-06-21","Mallorca Championships","Mallorca","250","t250"],
+  ["2026-06-21","Eastbourne International","Eastbourne","250","t250"],
+  ["2026-06-29","Wimbledon","London","gs","gs",true],
+  ["2026-07-13","Nordea Open","Båstad","250","t250"],
+  ["2026-07-13","Swiss Open","Gstaad","250","t250"],
+  ["2026-07-13","Los Cabos Open","Los Cabos","250","t250"],
+  ["2026-07-20","Washington Open","Washington","500","t500_48"],
+  ["2026-07-20","Generali Open","Kitzbühel","250","t250"],
+  ["2026-07-20","Croatia Open","Umag","250","t250"],
+  ["2026-07-26","Canadian Open","Toronto","m1000","m96",true],
+  ["2026-08-07","Cincinnati Open","Cincinnati","m1000","m96",true],
+  ["2026-08-17","Winston-Salem Open","Winston-Salem","250","t250_48"],
+  ["2026-08-30","US Open","New York","gs","gs",true],
+  ["2026-09-16","Chengdu Open","Chengdu","250","t250"],
+  ["2026-09-16","Hangzhou Open","Hangzhou","250","t250"],
+  ["2026-09-23","China Open","Beijing","500","t500"],
+  ["2026-09-23","Japan Open","Tokyo","500","t500"],
+].map(([d,name,city,tier,table,mand],i)=>({id:"e"+i,d,name,city,tier,table,mand:!!mand}));
+
+const TIER_CHIP = { gs:["Slam","c-gs"], m1000:["1000","c-m1000"], "500":["500","c-500"], "250":["250","c-250"], fin:["Finals","c-fin"] };
+const TIER_TABLE = { gs:"gs", m1000:"m96", "500":"t500", "250":"t250" };
+
+let state = { sel:{}, custom:[] };
+const KEY = "atp-points-v1";
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.sel) state = s; else state = null; } catch { state = null; }
+let isExample = false;
+if (!state) { state = exampleState(); isExample = true; }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+
+function exampleState(){
+  const pick = { "Australian Open":"R32", "Indian Wells Masters":"R16", "Miami Open":"R64", "Madrid Open":"QF", "Italian Open":"R32",
+    "Roland Garros":"R16", "Wimbledon":"R64", "US Open":"R32", "Canadian Open":"R32", "Cincinnati Open":"R64",
+    "Rotterdam Open":"QF", "Barcelona Open":"SF", "Geneva Open":"W", "Halle Open":"R16", "Stockholm Open":"F", "Brisbane International":"QF" };
+  const sel = {};
+  EVENTS.forEach(e=>{ if (pick[e.name]) sel[e.id] = { s: pick[e.name], q:false }; });
+  return { sel, custom:[] };
+}
+
+function allEvents(){
+  return EVENTS.concat(state.custom.map(c=>({ ...c, table: TIER_TABLE[c.tier], mand:false, custom:true })));
+}
+function stagesFor(e){
+  if (e.tier==="fin") return [];
+  return ORDER.filter(s => s in T[e.table]);
+}
+function pointsFor(e){
+  const r = state.sel[e.id]; if (!r) return 0;
+  if (e.tier==="fin") return (r.rr||0)*200 + (r.sf?400:0) + (r.sf&&r.f?500:0);
+  const t = T[e.table];
+  if (r.s==="qr") return t.qr;
+  let p = t[r.s] ?? 0;
+  if (r.q) p += t.q;
+  return p;
+}
+
+const cal = document.getElementById("cal");
+function fmt(d){ return new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}); }
+
+function render(){
+  const evs = allEvents().slice().sort((a,b)=> (a.d||"9999").localeCompare(b.d||"9999"));
+  const groups = new Map();
+  evs.forEach(e=>{
+    const k = e.custom ? "Your added events" : new Date(e.d+"T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+    if (!groups.has(k)) groups.set(k,[]); groups.get(k).push(e);
+  });
+  cal.innerHTML = "";
+  for (const [month, list] of groups){
+    const sec = document.createElement("section"); sec.className="month";
+    sec.innerHTML = `<h2>${month}</h2>`;
+    const box = document.createElement("div"); box.className="list";
+    list.forEach(e=> box.appendChild(rowFor(e)));
+    sec.appendChild(box); cal.appendChild(sec);
+  }
+  update();
+}
+
+function rowFor(e){
+  const row = document.createElement("div"); row.className="row"; row.dataset.id = e.id;
+  const [chip, cls] = TIER_CHIP[e.tier];
+  const r = state.sel[e.id] || {};
+  let ctl = "";
+  if (e.tier==="fin"){
+    ctl = `<select id="rr-${e.id}" aria-label="Round-robin wins at ${e.name}">
+        <option value="-1">Did not play</option>
+        ${[0,1,2,3].map(n=>`<option value="${n}" ${r.rr===n?"selected":""}>${n} RR win${n===1?"":"s"}</option>`).join("")}
+      </select>
+      <select id="ko-${e.id}" aria-label="Knockout result at ${e.name}">
+        <option value="">Out in round robin / lost SF</option>
+        <option value="sf" ${r.sf&&!r.f?"selected":""}>Won SF, lost final</option>
+        <option value="f" ${r.f?"selected":""}>Won title</option>
+      </select>`;
+  } else {
+    const opts = stagesFor(e).map(s=>`<option value="${s}" ${r.s===s?"selected":""}>${STAGE_LABEL[s]}</option>`).join("");
+    ctl = `<select id="st-${e.id}" aria-label="Result at ${e.name}">
+        <option value="">Did not play</option>${opts}
+        <option value="qr" ${r.s==="qr"?"selected":""}>${STAGE_LABEL.qr}</option>
+      </select>
+      <label class="q" title="Came through qualifying"><input type="checkbox" id="q-${e.id}" ${r.q?"checked":""} ${!r.s||r.s==="qr"?"disabled":""}> Q</label>`;
+    if (e.custom) ctl += `<button type="button" class="rm" data-rm="${e.id}">Remove</button>`;
+  }
+  const meta = e.tier==="fin" ? "200 per RR win · +400 SF · +500 final" :
+    `${e.city}${e.mand?" · mandatory":""}${/48/.test(e.table)?" · 48-draw":""}${e.table==="m56"?" · 56-draw":""}`;
+  row.innerHTML = `<div class="date">${e.d?fmt(e.d):"—"}</div>
+    <div class="ev"><div class="name"><span class="chip ${cls}">${chip}</span>${e.name}</div><div class="meta">${meta}</div></div>
+    <div class="ctl">${ctl}</div>
+    <div class="pts zero">0</div>`;
+  return row;
+}
+
+cal.addEventListener("change", ev=>{
+  const row = ev.target.closest(".row"); if (!row) return;
+  const id = row.dataset.id; const e = allEvents().find(x=>x.id===id);
+  if (e.tier==="fin"){
+    const rr = +row.querySelector(`#rr-${id}`).value, ko = row.querySelector(`#ko-${id}`).value;
+    if (rr<0) delete state.sel[id]; else state.sel[id] = { rr, sf: ko==="sf"||ko==="f", f: ko==="f" };
+  } else {
+    const s = row.querySelector(`#st-${id}`).value, qbox = row.querySelector(`#q-${id}`);
+    qbox.disabled = !s || s==="qr"; if (qbox.disabled) qbox.checked = false;
+    if (!s) delete state.sel[id]; else state.sel[id] = { s, q: qbox.checked };
+  }
+  markEdited(); save(); update();
+});
+cal.addEventListener("click", ev=>{
+  const id = ev.target.dataset && ev.target.dataset.rm; if (!id) return;
+  state.custom = state.custom.filter(c=>c.id!==id); delete state.sel[id]; markEdited(); save(); render();
+});
+
+function markEdited(){ isExample = false; document.getElementById("exNote").hidden = true; }
+
+function update(){
+  const evs = allEvents();
+  const pts = Object.fromEntries(evs.map(e=>[e.id, pointsFor(e)]));
+  // best-19: mandatory always count; best 7 of the rest (non-Finals); Finals added on top
+  let total = 0, raw = 0, played = 0, titles = 0;
+  const optional = [];
+  evs.forEach(e=>{
+    const p = pts[e.id], r = state.sel[e.id];
+    raw += p;
+    if (r) { played++; if (r.s==="W" || r.f) titles++; }
+    if (e.tier==="fin" || e.mand) total += p;
+    else if (p>0) optional.push(e);
+  });
+  optional.sort((a,b)=>pts[b.id]-pts[a.id]);
+  const dropped = new Set(optional.slice(7).map(e=>e.id));
+  optional.slice(0,7).forEach(e=> total += pts[e.id]);
+
+  document.querySelectorAll(".row").forEach(row=>{
+    const id = row.dataset.id, p = pts[id] ?? 0, el = row.querySelector(".pts");
+    el.textContent = p; el.classList.toggle("zero", p===0);
+    row.classList.toggle("played", !!state.sel[id]);
+    row.classList.toggle("dropped", dropped.has(id));
+    row.title = dropped.has(id) ? "Outside your best 7 non-mandatory results, so it doesn't count" : "";
+  });
+  const n = x=>x.toLocaleString("en-US");
+  document.getElementById("total").textContent = n(total);
+  document.getElementById("raw").textContent = n(raw);
+  document.getElementById("played").textContent = played;
+  document.getElementById("titles").textContent = titles;
+}
+
+document.getElementById("clear").addEventListener("click", ()=>{ state = { sel:{}, custom:[] }; markEdited(); save(); render(); });
+document.getElementById("example").addEventListener("click", ()=>{
+  state = exampleState(); isExample = true; document.getElementById("exNote").hidden = false;
+  try { localStorage.removeItem(KEY); } catch {} render();
+});
+document.getElementById("addForm").addEventListener("submit", ev=>{
+  ev.preventDefault();
+  const name = document.getElementById("cName").value.trim(); if (!name) return;
+  const tier = document.getElementById("cTier").value;
+  state.custom.push({ id:"c"+Date.now(), name, city:"Added by you", tier, d:"" });
+  document.getElementById("cName").value = ""; markEdited(); save(); render();
+});
+
+document.getElementById("exNote").hidden = !isExample;
+render();
+</script>
