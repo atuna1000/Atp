@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>ATP Points Calculator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -30,6 +36,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
 .wrap { max-width: 920px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; }
 h1 { font-family: var(--display); font-weight: 700; font-size: 2.4rem; line-height: 1; margin: 0; letter-spacing: .01em; text-transform: uppercase; text-wrap: balance; }
@@ -90,7 +98,8 @@ label.q { font-size: .78rem; color: var(--muted); display: flex; gap: 4px; align
   h1 { font-size: 2rem; }
 }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <h1>ATP Points Calculator</h1>
   <p class="sub">Every ATP 250, 500, Masters 1000, Grand Slam and the ATP Finals in the 52-week window ending 2 Oct 2026. Pick how far you got at each one and your ranking points add up live.</p>
@@ -370,3 +379,5 @@ document.getElementById("addForm").addEventListener("submit", ev=>{
 document.getElementById("exNote").hidden = !isExample;
 render();
 </script>
+</body>
+</html>
