@@ -58,6 +58,15 @@ h1 { font-family: var(--display); font-weight: 700; font-size: 2.3rem; line-heig
 .stat.main .v { font-size: 2.7rem; background: var(--ball); color: var(--ball-ink); padding: 0 10px; border-radius: 6px; }
 .board .side { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: .78rem; opacity: .9; text-align: right; }
 .board .side .save { white-space: nowrap; }
+.nav { display: flex; align-items: center; gap: 8px; }
+.nav .week { display: flex; flex-direction: column; align-items: center; min-width: 9ch; line-height: 1.1; }
+.nav .week .k { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
+.nav .week > span:last-child { font-family: var(--display); font-weight: 700; font-size: 1.15rem; white-space: nowrap; }
+.nav button { padding: 7px 12px; }
+.nav button:disabled { opacity: .4; cursor: default; }
+#next { background: var(--ball); color: var(--ball-ink); border-color: transparent; font-weight: 600; }
+.tag.new { color: var(--ball-ink); background: var(--ball); border: 0; }
+#changes b { color: var(--ink); }
 .board .side .save::before { content: "●"; color: var(--ball); margin-right: 5px; font-size: .7em; vertical-align: 1px; }
 button { font: inherit; font-size: .85rem; border-radius: 8px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .board button { background: transparent; color: #fff; border-color: rgb(255 255 255 / .5); }
@@ -95,7 +104,8 @@ label.q input { width: 16px; height: 16px; margin: 0; accent-color: var(--court)
   .when { order: 2; }
   .ctl { justify-content: flex-start; }
   .ctl select { flex: 1 1 200px; }
-  .board .side { margin-left: 0; align-items: flex-start; text-align: left; flex-direction: row; flex-wrap: wrap; gap: 8px 14px; width: 100%; }
+  .board .side { margin-left: 0; align-items: center; text-align: left; flex-direction: row; flex-wrap: wrap; gap: 8px 14px; width: 100%; justify-content: space-between; }
+  .nav { width: 100%; justify-content: space-between; }
 }
 
 .rules { margin-top: 30px; font-size: .88rem; color: var(--muted); max-width: 70ch; }
@@ -112,7 +122,7 @@ label.q input { width: 16px; height: 16px; margin: 0; accent-color: var(--court)
 <div class="wrap">
   <header>
     <h1>My ATP Points</h1>
-    <p class="sub">Every ATP 250, ATP 500, Masters 1000, Grand Slam and the ATP Finals played in the last 52 weeks (10 Nov 2025 to 8 Nov 2026). Pick the round you reached in each one. It saves by itself.</p>
+    <p class="sub">Every ATP 250, ATP 500, Masters 1000, Grand Slam and ATP Finals counting toward the ranking this week. Pick the round you reached in each one, then tap <b>Next week</b>: the week's new events come in, the ones from 52 weeks ago drop out. It saves by itself.</p>
   </header>
 
   <div class="board" role="region" aria-label="Scoreboard">
@@ -120,12 +130,17 @@ label.q input { width: 16px; height: 16px; margin: 0; accent-color: var(--court)
     <div class="stat"><span class="k">Events played</span><span class="v" id="count">0</span></div>
     <div class="stat" id="allWrap" hidden><span class="k">All results</span><span class="v" id="all">0</span></div>
     <div class="side">
+      <div class="nav">
+        <button type="button" id="prev" aria-label="Previous week">◀</button>
+        <span class="week"><span class="k">Ranking week of</span><span id="week"></span></span>
+        <button type="button" id="next">Next week ▶</button>
+      </div>
       <span class="save" id="save">Saved on this device</span>
-      <span id="countNote"></span>
     </div>
   </div>
 
-  <p class="note">Rounds are named the way the draw sheet names them, and each option shows its points. Tick <b>Qualifier</b> if you came through qualifying; those points are added on top.</p>
+  <p class="note" id="changes"></p>
+  <p class="note">Newest events are at the top. Rounds are named the way the draw sheet names them, and each option shows its points. Tick <b>Qualifier</b> if you came through qualifying; those points are added on top.</p>
 
   <div id="months"></div>
 
@@ -134,7 +149,7 @@ label.q input { width: 16px; height: 16px; margin: 0; accent-color: var(--court)
     <p>The ATP ranking counts your best 19 results from the last 52 weeks. Grand Slams and the eight mandatory Masters 1000s (Monte-Carlo is optional) always count. The ATP Finals are added on top of the 19. A result that does not make the cut is shown struck through.</p>
     <p>Seeds who get a bye and lose their first match receive the previous round's points (10 at a 96-draw Masters), so pick the round that matches the points you were given.</p>
     <div class="tbl"><table id="ptsTable"></table></div>
-    <p>Schedule source: the official 2026 ATP Tour calendar. Not listed because they were not finished by 8 Nov 2026: the Nordic Open in Stockholm (8 to 14 Nov) and the 2026 ATP Finals (15 to 22 Nov). Team events (Davis Cup, Laver Cup) carry no ranking points; the United Cup does, so it has a box for the points you were awarded.</p>
+    <p>An event's points count from the Monday after it ends and drop on the Monday after the next edition ends. The 2026 season follows the official ATP calendar; from 2027 on, the same calendar is repeated 52 weeks later. Team events (Davis Cup, Laver Cup) carry no ranking points; the United Cup does, so it has a box for the points you were awarded.</p>
   </section>
 
   <div class="danger">
@@ -168,10 +183,9 @@ const ROUND_NAMES = {
 };
 const FIXED = { W:"Won the title", F:"Lost the final", SF:"Lost in the semifinal", QF:"Lost in the quarterfinal" };
 
-// [id, start, end, name, city, surface, tier, table, mandatory]
-// Dates from the official 2026 ATP Tour calendar (and the 2025 ATP Finals).
-const EVENTS = [
-  ["fin25","2025-11-09","2025-11-16","ATP Finals 2025","Turin","Hard (i)","fin","fin"],
+// [id, start, end, name, city, surface, tier, table, mandatory] — 2026 editions, from the official ATP calendar.
+// Later years repeat this calendar 52 weeks on; the 2025 ATP Finals are added below.
+const BASE = [
   ["uc","2026-01-02","2026-01-11","United Cup","Perth & Sydney","Hard","team","team"],
   ["brisbane","2026-01-05","2026-01-11","Brisbane International","Brisbane","Hard","250","t250"],
   ["hongkong","2026-01-05","2026-01-11","Hong Kong Open","Hong Kong","Hard","250","t250"],
@@ -230,14 +244,50 @@ const EVENTS = [
   ["vienna","2026-10-26","2026-11-01","Erste Bank Open","Vienna","Hard (i)","500","t500"],
   ["basel","2026-10-26","2026-11-01","Swiss Indoors","Basel","Hard (i)","500","t500"],
   ["paris","2026-11-02","2026-11-08","Rolex Paris Masters","Paris","Hard (i)","m1000","m56",true],
+  ["stockholm","2026-11-08","2026-11-14","BNP Paribas Nordic Open","Stockholm","Hard (i)","250","t250"],
+  ["fin","2026-11-15","2026-11-22","ATP Finals","Turin","Hard (i)","fin","fin"],
 ].map(([id,start,end,name,city,surface,tier,table,mand])=>({id,start,end,name,city,surface,tier,table,mand:!!mand}));
+// Editions with real dates that differ from "2026 ± 52 weeks".
+// Stockholm moved from October to November in 2026, so its 2025 points are held until the 2026 edition is played.
+const EXPLICIT = { "fin@2025": ["2025-11-09","2025-11-16"], "stockholm@2025": ["2025-10-13","2025-10-19"] };
+
+const DAY = 86400000, WEEK = 7*DAY;
+const P = s => Date.parse(s+"T00:00:00Z");
+const nextMonday = t => { const dow = (new Date(t).getUTCDay()+6)%7; return t + (7-dow)*DAY; };
+const START = P("2026-11-09");   // first ranking Monday after the Paris Masters 2026
+const editionCache = new Map();
+function edition(base, k){
+  const year = 2026 + k, id = `${base.id}@${year}`;
+  if (!editionCache.has(id)) {
+    const ex = EXPLICIT[id];
+    const start = ex ? P(ex[0]) : P(base.start) + 364*k*DAY;
+    const end = ex ? P(ex[1]) : P(base.end) + 364*k*DAY;
+    editionCache.set(id, { ...base, base: base.id, id, k, year, start, end, from: nextMonday(end), name: `${base.name} ${year}` });
+  }
+  return editionCache.get(id);
+}
+const untilOf = e => edition(BASE.find(b => b.id === e.base), e.k+1).from;
+const counts = (e, D) => e.from <= D && D < untilOf(e);
+// Every edition counting on Monday D, newest first.
+function countingOn(D){
+  const out = [];
+  const kMax = Math.ceil((D - START) / (364*DAY)) + 1;
+  for (let k = -1; k <= kMax; k++) BASE.forEach(b => { const e = edition(b, k); if (counts(e, D)) out.push(e); });
+  return out.sort((a,b) => b.start - a.start);
+}
+let EVENTS = [];
 
 const CHIP = { gs:["Slam","c-gs"], m1000:["1000","c-m1000"], "500":["500","c-500"], "250":["250","c-250"], fin:["Finals","c-fin"], team:["Team","c-team"] };
 
 // ---------- state + saving ----------
 const KEY = "my-atp-points-v1";
-let state = { picks:{}, updated:0 };
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.picks) state = s; } catch {}
+let state = { week: START, picks:{}, updated:0 };
+function normalize(s){
+  const picks = {};
+  Object.entries(s.picks || {}).forEach(([id, v]) => { picks[id.includes("@") ? id : id === "fin25" ? "fin@2025" : id + "@2026"] = v; });
+  return { week: s.week && s.week >= START ? s.week : START, picks, updated: s.updated || 0 };
+}
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.picks) state = normalize(s); } catch {}
 function saveLocal(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
 const saveEl = document.getElementById("save");
 function setSave(t){ saveEl.textContent = t; }
@@ -255,7 +305,7 @@ async function initDb(){
       const remote = snap.exists ? snap.data() : null;
       const ru = remote && remote.picks ? (remote.updated || 0) : -1;
       if (remote && remote.picks && ru > (state.updated || 0)) {
-        state = { picks: {...remote.picks}, updated: ru }; saveLocal(); render(); setSave("Synced to your account");
+        state = normalize(remote); saveLocal(); render(); setSave("Synced to your account");
       } else if (first && state.updated && ru < state.updated) {
         pushDb();
       } else setSave("Synced to your account");
@@ -302,15 +352,15 @@ function ranking(){
   const slots = Math.max(0, 19 - mandCount);
   opt.slice(0, slots).forEach(([,p]) => total += p);
   const dropped = new Set(opt.slice(slots).map(([e]) => e.id));
-  return { total, all, played, dropped, counted: Math.min(played, mandCount + Math.min(slots, opt.length) + (state.picks.fin25 ? 1 : 0)) };
+  const finPlayed = EVENTS.some(e => e.tier === "fin" && state.picks[e.id]) ? 1 : 0;
+  return { total, all, played, dropped, counted: Math.min(played, mandCount + Math.min(slots, opt.length) + finPlayed) };
 }
 
 // ---------- rendering ----------
-const fmt = (s, o={day:"numeric", month:"short"}) => new Date(s+"T00:00:00Z").toLocaleDateString("en-GB", {...o, timeZone:"UTC"});
 function when(e){
-  const a = new Date(e.start+"T00:00:00Z"), b = new Date(e.end+"T00:00:00Z");
+  const a = new Date(e.start), b = new Date(e.end);
   const sameMonth = a.getUTCMonth() === b.getUTCMonth();
-  return sameMonth ? `${a.getUTCDate()}–${fmt(e.end)}` : `${fmt(e.start)} – ${fmt(e.end)}`;
+  return sameMonth ? `${a.getUTCDate()}–${fmtT(e.end)}` : `${fmtT(e.start)} – ${fmtT(e.end)}`;
 }
 function optionsFor(e, r){
   const t = T[e.table], names = ROUND_NAMES[e.table];
@@ -347,17 +397,21 @@ function rowFor(e){
       <label class="q" title="Came through qualifying"><input type="checkbox" id="q-${e.id}" ${r.q?"checked":""} ${!r.s||r.s==="qr"||r.s==="q2"?"disabled":""}> Qualifier (+${T[e.table].q})</label>`;
   }
   const mand = e.mand ? `<span class="tag">mandatory</span>` : "";
+  const fresh = e.from === state.week ? `<span class="tag new">new this week</span>` : "";
   row.innerHTML = `<div class="when">${when(e)}</div>
-    <div class="ev"><div class="name"><span class="chip ${cls}">${chip}</span>${e.name}${mand}</div><div class="meta">${e.city} · ${e.surface}</div></div>
+    <div class="ev"><div class="name"><span class="chip ${cls}">${chip}</span>${e.name}${mand}${fresh}</div><div class="meta">${e.city} · ${e.surface}</div></div>
     <div class="ctl">${ctl}</div>
     <div class="pts zero">0</div>`;
   return row;
 }
 const monthsEl = document.getElementById("months");
+const fmtT = (t, o={day:"numeric", month:"short"}) => new Date(t).toLocaleDateString("en-GB", {...o, timeZone:"UTC"});
 function render(){
+  const D = state.week;
+  EVENTS = countingOn(D);
   monthsEl.innerHTML = "";
   const groups = new Map();
-  EVENTS.forEach(e => { const k = fmt(e.start, {month:"long", year:"numeric"}); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  EVENTS.forEach(e => { const k = fmtT(e.start, {month:"long", year:"numeric"}); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
   for (const [month, list] of groups) {
     const sec = document.createElement("section"); sec.className = "month";
     sec.innerHTML = `<h2>${month}</h2>`;
@@ -382,7 +436,18 @@ function update(){
   const allWrap = document.getElementById("allWrap");
   allWrap.hidden = all === total;
   document.getElementById("all").textContent = n(all);
-  document.getElementById("countNote").textContent = all !== total ? `${counted} of ${played} results count toward the ranking` : "";
+  document.getElementById("allWrap").querySelector(".k").textContent = all !== total ? `All results (${counted} of ${played} count)` : "All results";
+
+  const D = state.week;
+  document.getElementById("week").textContent = fmtT(D, {day:"numeric", month:"short", year:"numeric"});
+  document.getElementById("prev").disabled = D <= START;
+  const nextIn = countingOn(D + WEEK).filter(e => e.from === D + WEEK);
+  const nextOut = EVENTS.filter(e => untilOf(e) === D + WEEK);
+  const outPts = nextOut.reduce((s,e) => s + pointsFor(e), 0);
+  const parts = [];
+  if (nextIn.length) parts.push(`<b>In:</b> ${nextIn.map(e => e.name).join(", ")}`);
+  if (nextOut.length) parts.push(`<b>Out:</b> ${nextOut.map(e => e.name).join(", ")}${outPts ? ` (−${n(outPts)} pts)` : ""}`);
+  document.getElementById("changes").innerHTML = `Next Monday, ${fmtT(D + WEEK)}: ` + (parts.join(" · ") || "no change");
 }
 
 function onChange(ev){
@@ -404,12 +469,15 @@ function onChange(ev){
 monthsEl.addEventListener("change", onChange);
 monthsEl.addEventListener("input", ev => { if (ev.target.type === "number") onChange(ev); });
 
+document.getElementById("next").addEventListener("click", () => { state.week += WEEK; persist(); render(); window.scrollTo(0, 0); });
+document.getElementById("prev").addEventListener("click", () => { if (state.week > START) { state.week -= WEEK; persist(); render(); window.scrollTo(0, 0); } });
+
 let armed = false;
 document.getElementById("clear").addEventListener("click", () => {
   const c = document.getElementById("clearConfirm");
   if (!armed) { armed = true; c.hidden = false; setTimeout(() => { armed = false; c.hidden = true; }, 4000); return; }
   armed = false; c.hidden = true;
-  state = { picks:{}, updated: 0 }; persist(); render(); window.scrollTo(0, 0);
+  state = { week: START, picks:{}, updated: 0 }; persist(); render(); window.scrollTo(0, 0);
 });
 
 // Points reference table
