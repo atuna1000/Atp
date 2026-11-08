@@ -249,7 +249,7 @@ const BASE = [
 ].map(([id,start,end,name,city,surface,tier,table,mand])=>({id,start,end,name,city,surface,tier,table,mand:!!mand}));
 // Editions with real dates that differ from "2026 ± 52 weeks".
 // Stockholm moved from October to November in 2026, so its 2025 points are held until the 2026 edition is played.
-const EXPLICIT = { "fin@2025": ["2025-11-09","2025-11-16"], "stockholm@2025": ["2025-10-13","2025-10-19"] };
+const EXPLICIT = { "fin_2025": ["2025-11-09","2025-11-16"], "stockholm_2025": ["2025-10-13","2025-10-19"] };
 
 const DAY = 86400000, WEEK = 7*DAY;
 const P = s => Date.parse(s+"T00:00:00Z");
@@ -257,7 +257,7 @@ const nextMonday = t => { const dow = (new Date(t).getUTCDay()+6)%7; return t + 
 const START = P("2026-11-09");   // first ranking Monday after the Paris Masters 2026
 const editionCache = new Map();
 function edition(base, k){
-  const year = 2026 + k, id = `${base.id}@${year}`;
+  const year = 2026 + k, id = `${base.id}_${year}`;
   if (!editionCache.has(id)) {
     const ex = EXPLICIT[id];
     const start = ex ? P(ex[0]) : P(base.start) + 364*k*DAY;
@@ -284,7 +284,10 @@ const KEY = "my-atp-points-v1";
 let state = { week: START, picks:{}, updated:0 };
 function normalize(s){
   const picks = {};
-  Object.entries(s.picks || {}).forEach(([id, v]) => { picks[id.includes("@") ? id : id === "fin25" ? "fin@2025" : id + "@2026"] = v; });
+  Object.entries(s.picks || {}).forEach(([id, v]) => {
+    const nid = id.includes("@") ? id.replace("@", "_") : id.includes("_") ? id : id === "fin25" ? "fin_2025" : id + "_2026";
+    picks[nid] = v;
+  });
   return { week: s.week && s.week >= START ? s.week : START, picks, updated: s.updated || 0 };
 }
 try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.picks) state = normalize(s); } catch {}
